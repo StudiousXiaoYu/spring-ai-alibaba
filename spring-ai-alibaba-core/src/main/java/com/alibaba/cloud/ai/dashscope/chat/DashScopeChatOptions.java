@@ -16,6 +16,17 @@
 
 package com.alibaba.cloud.ai.dashscope.chat;
 
+import com.alibaba.cloud.ai.dashscope.api.DashScopeApi;
+import com.alibaba.cloud.ai.dashscope.api.DashScopeResponseFormat;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.ai.model.ModelOptionsUtils;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
+import org.springframework.ai.tool.ToolCallback;
+import org.springframework.util.Assert;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -23,18 +34,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-
-import com.alibaba.cloud.ai.dashscope.api.DashScopeApi;
-import com.alibaba.cloud.ai.dashscope.api.DashScopeResponseFormat;
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonProperty;
-
-import org.springframework.ai.chat.prompt.ChatOptions;
-import org.springframework.ai.model.ModelOptionsUtils;
-import org.springframework.ai.model.tool.ToolCallingChatOptions;
-import org.springframework.ai.tool.ToolCallback;
-import org.springframework.util.Assert;
 
 /**
  * @author nottyjay
@@ -136,6 +135,22 @@ public class DashScopeChatOptions implements ToolCallingChatOptions {
   private @JsonProperty("tools") List<DashScopeApi.FunctionTool> tools;
 
   /**
+   * Strategies for networked search. Takes effect only if the enable_search is true.
+   */
+  private @JsonProperty("search_options") DashScopeApi.SearchOptions searchOptions;
+
+  /**
+   * Whether to enable parallel tool calling。
+   */
+  private @JsonProperty("parallel_tool_calls") Boolean parallelToolCalls;
+
+  /**
+   * Optional HTTP headers to be added to the chat completion request.
+   */
+  @JsonIgnore
+  private Map<String, String> httpHeaders = new HashMap<>();
+
+  /**
    * When using the tools parameter, it is used to control the model to call a specified tool. There are three possible values:
    * "none" indicates not to call any tool. When the tools parameter is empty, the default value is "none".
    * "auto" indicates that the model decides whether to call a tool, which may or may not happen. When the tools parameter is not empty, the default value is "auto".
@@ -155,6 +170,12 @@ public class DashScopeChatOptions implements ToolCallingChatOptions {
    * Whether to enable the thinking process of the model.
    */
   private @JsonProperty("enable_thinking") Boolean enableThinking = false;
+
+  /**
+   * The maximum length of the thinking process takes effect when enable_thinking is true,
+   * and is suitable for Qwen3 full system model.
+   */
+  private @JsonProperty("thinking_budget") Integer thinkingBudget;
 
   /**
    * Collection of {@link ToolCallback}s to be used for tool calling in the chat completion requests.
@@ -232,6 +253,30 @@ public class DashScopeChatOptions implements ToolCallingChatOptions {
     this.temperature = temperature;
   }
 
+  public void setSearchOptions(DashScopeApi.SearchOptions searchOptions) {
+    this.searchOptions = searchOptions;
+  }
+
+  public DashScopeApi.SearchOptions getSearchOptions() {
+    return searchOptions;
+  }
+
+  public Boolean getParallelToolCalls() {
+    return parallelToolCalls;
+  }
+
+  public void setParallelToolCalls(Boolean parallelToolCalls) {
+      this.parallelToolCalls = parallelToolCalls;
+  }
+
+  public void setHttpHeaders(Map<String, String> httpHeaders) {
+    this.httpHeaders = httpHeaders;
+  }
+
+  public Map<String, String> getHttpHeaders() {
+    return httpHeaders;
+  }
+
   @Override
   public Double getTopP() {
     return this.topP;
@@ -268,6 +313,13 @@ public class DashScopeChatOptions implements ToolCallingChatOptions {
 	return responseFormat;
   }
 
+  public Integer getThinkingBudget() {
+        return thinkingBudget;
+    }
+
+    public void setThinkingBudget(Integer thinkingBudget) {
+        this.thinkingBudget = thinkingBudget;
+    }
   public void setResponseFormat(DashScopeResponseFormat responseFormat) {
 
 	this.responseFormat = responseFormat;
@@ -400,6 +452,7 @@ public class DashScopeChatOptions implements ToolCallingChatOptions {
   }
 
   public static class DashscopeChatOptionsBuilder {
+
     private DashScopeChatOptions options;
 
     public DashscopeChatOptionsBuilder() {
@@ -408,6 +461,21 @@ public class DashScopeChatOptions implements ToolCallingChatOptions {
 
     public DashscopeChatOptionsBuilder withModel(String model) {
       this.options.model = model;
+      return this;
+    }
+
+    public DashscopeChatOptionsBuilder withSearchOptions(DashScopeApi.SearchOptions searchOptions) {
+      this.options.searchOptions = searchOptions;
+      return this;
+    }
+
+    public DashscopeChatOptionsBuilder withParallelToolCalls(Boolean parallelToolCalls) {
+      this.options.parallelToolCalls = parallelToolCalls;
+      return this;
+    }
+
+    public DashscopeChatOptionsBuilder withHttpHeaders(Map<String, String> httpHeaders) {
+      this.options.httpHeaders = httpHeaders;
       return this;
     }
 
@@ -528,12 +596,18 @@ public class DashScopeChatOptions implements ToolCallingChatOptions {
       return this;
     }
 
+    public DashscopeChatOptionsBuilder withThinkingBudget(Integer thinkingBudget) {
+        this.options.thinkingBudget = thinkingBudget;
+        return this;
+    }
+
     public DashScopeChatOptions build() {
       return this.options;
     }
   }
 
   public static DashScopeChatOptions fromOptions(DashScopeChatOptions fromOptions){
+
     return DashScopeChatOptions.builder()
             .withModel(fromOptions.getModel())
             .withTemperature(fromOptions.getTemperature())
@@ -555,6 +629,10 @@ public class DashScopeChatOptions implements ToolCallingChatOptions {
             .withMultiModel(fromOptions.getMultiModel())
             .withVlHighResolutionImages(fromOptions.getVlHighResolutionImages())
             .withEnableThinking(fromOptions.getEnableThinking())
+            .withThinkingBudget(fromOptions.getThinkingBudget())
+            .withParallelToolCalls(fromOptions.getParallelToolCalls())
+            .withSearchOptions(fromOptions.getSearchOptions())
+            .withHttpHeaders(fromOptions.getHttpHeaders())
             .build();
   }
 
@@ -580,10 +658,14 @@ public class DashScopeChatOptions implements ToolCallingChatOptions {
             Objects.equals(toolChoice, that.toolChoice) &&
             Objects.equals(vlHighResolutionImages, that.vlHighResolutionImages) &&
             Objects.equals(enableThinking, that.enableThinking) &&
+            Objects.equals(thinkingBudget, that.thinkingBudget) &&
             Objects.equals(toolCallbacks, that.toolCallbacks) &&
             Objects.equals(toolNames, that.toolNames) &&
             Objects.equals(internalToolExecutionEnabled, that.internalToolExecutionEnabled) &&
             Objects.equals(multiModel, that.multiModel) &&
+            Objects.equals(searchOptions, that.searchOptions) &&
+            Objects.equals(parallelToolCalls, that.parallelToolCalls) &&
+            Objects.equals(httpHeaders, that.httpHeaders) &&
             Objects.equals(toolContext, that.toolContext);
   }
 
@@ -591,8 +673,8 @@ public class DashScopeChatOptions implements ToolCallingChatOptions {
   public int hashCode() {
     return Objects.hash(model, stream, temperature, seed, topP, topK, stop, enableSearch,
             responseFormat, incrementalOutput, repetitionPenalty, tools, toolChoice,
-            vlHighResolutionImages, enableThinking, toolCallbacks, toolNames,
-            internalToolExecutionEnabled, multiModel, toolContext);
+            vlHighResolutionImages, enableThinking, thinkingBudget, toolCallbacks, toolNames,
+            internalToolExecutionEnabled, multiModel, searchOptions, parallelToolCalls, httpHeaders, toolContext);
   }
 
   @Override
